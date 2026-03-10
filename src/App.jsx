@@ -4,25 +4,29 @@ import {
   Video,
   CheckCircle,
   AlertTriangle,
-  Sparkles,
   Milk,
   Layers,
   Camera,
   Mic,
   Copy,
+  Link as LinkIcon,
+  Database
 } from 'lucide-react';
 
 const APTAMIL_BLUE = '#003087';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('guidelines');
-  const [selectedPillar, setSelectedPillar] = useState('vlog');
-  const [aiPrompt, setAiPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState('ai');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
-  const [apiKey, setApiKey] = useState(
-    'AIzaSyCpZkvnLY9Cx_4-FnYEt_BCBbOMooosfrc'
-  );
+  const [apiKey, setApiKey] = useState('AIzaSyCvws_THk4cgUKyJx9lHROk3Ls2FQ2f18M');
+
+  // --- STATE CHO GOOGLE SHEET ---
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [sheetData, setSheetData] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [loadStatus, setLoadStatus] = useState('');
 
   // 1. DATA: SẢN PHẨM
   const products = [
@@ -46,59 +50,7 @@ const App = () => {
     },
   ];
 
-  // 2. DATA: PILLARS (Chuẩn 100% theo Brief)
-  const pillars = {
-    soan_gio: {
-      title: 'Soạn Giỏ Sinh',
-      focus: 'Chuẩn bị đi sinh',
-      message: 'Aptamil là vật dụng thiết yếu không thể thiếu.',
-      tags: ['#AptamilNewZealand3', '#DeKhangTriNao', '#DiSinh'],
-    },
-    pha_sua: {
-      title: 'Pha Sữa Cùng Mẹ',
-      focus: 'Hướng dẫn pha sữa',
-      message: 'Lựa chọn an toàn, đúng chuẩn cho bé.',
-      tags: ['#AptamilNewZealand3', '#AptamilKID', '#PhaSuaChuan'],
-    },
-    unbox: {
-      title: 'Unbox Bỉm Sữa',
-      focus: 'Khui đơn hàng',
-      message: 'Định vị cao cấp, khoản đầu tư xứng đáng.',
-      tags: ['#AptamilNewZealand3', '#UnboxBimSua', '#DeKhangTriNao'],
-    },
-    khoe_goc: {
-      title: 'Khoe Góc Bỉm Sữa',
-      focus: 'Góc chăm bé',
-      message: 'Lựa chọn đáng tin cậy trong thói quen chăm con.',
-      tags: ['#AptamilNewZealand3', '#GocBimSua', '#AptamilKID'],
-    },
-    vlog: {
-      title: 'Vlog Mẹ Gen Z',
-      focus: 'Một ngày của mẹ',
-      message: 'Aptamil là người bạn đồng hành đa nhiệm.',
-      tags: ['#AptamilNewZealand3', '#DailyVlog', '#MeGenZ'],
-    },
-    flexing: {
-      title: 'Thế hệ cợt nhả',
-      focus: 'Flexing bé khỏe',
-      message: 'Aptamil là khoản đầu tư tốt nhất.',
-      tags: ['#AptamilNewZealand3', '#Flexing', '#AptamilKID'],
-    },
-    qa: {
-      title: 'Chọn mặt gửi vàng',
-      focus: 'Q&A / Chia sẻ POV',
-      message: 'Giải đáp thắc mắc về sữa công thức.',
-      tags: ['#AptamilNewZealand3', '#DeKhangTriNao', '#ChiaSeKinhNghiem'],
-    },
-    compare: {
-      title: 'So sánh các dòng sữa',
-      focus: 'Review So Sánh',
-      message: 'Lựa chọn không áp lực cho từng giai đoạn.',
-      tags: ['#AptamilNewZealand3', '#SoSanhSua', '#AptamilKID'],
-    },
-  };
-
-  // 3. DATA: PHÁT ÂM & DƯỠNG CHẤT
+  // 2. DATA: PHÁT ÂM & DƯỠNG CHẤT
   const usps = [
     {
       term: 'Aptamil New Zealand',
@@ -133,32 +85,126 @@ const App = () => {
     { term: 'Choline', read: 'Cô-lin', benefit: 'Hỗ trợ não bộ.' },
   ];
 
+  // --- HÀM TẢI VÀ ĐỌC GOOGLE SHEET ---
+  const handleLoadSheet = async () => {
+    if (!sheetUrl) {
+      setLoadStatus('Vui lòng dán link Google Sheet!');
+      return;
+    }
+
+    setLoadStatus('Đang tải dữ liệu...');
+    try {
+      const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (!match) throw new Error('Link không đúng định dạng. Vui lòng copy toàn bộ link Google Sheet.');
+      const sheetId = match[1];
+
+      const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=tsv`;
+      const response = await fetch(fetchUrl);
+      
+      if (!response.ok) throw new Error('Không thể đọc Sheet. Đảm bảo bạn đã mở quyền "Bất kỳ ai có liên kết".');
+      
+      const text = await response.text();
+      const lines = text.split('\n');
+      if (lines.length < 2) throw new Error('Sheet trống hoặc không đúng định dạng.');
+
+      // TÌM DÒNG CHỨA TIÊU ĐỀ THỰC SỰ (Quét 5 dòng đầu tiên)
+      let headerIndex = -1;
+      let headers = [];
+      for (let i = 0; i < Math.min(5, lines.length); i++) {
+        const cols = lines[i].split('\t').map(h => h.trim());
+        if (cols.includes('Phân loại')) {
+          headerIndex = i;
+          headers = cols;
+          break;
+        }
+      }
+
+      if (headerIndex === -1) {
+        throw new Error('Không tìm thấy cột "Phân loại". Hãy kiểm tra xem có bị gõ thừa dấu cách trong Sheet không nhé!');
+      }
+
+      // Đọc dữ liệu từ dòng bên dưới dòng tiêu đề trở đi
+      const data = lines.slice(headerIndex + 1).map(line => {
+        const values = line.split('\t');
+        return headers.reduce((obj, header, index) => {
+          obj[header] = values[index] ? values[index].trim() : '';
+          return obj;
+        }, {});
+      }).filter(row => row['Phân loại']); 
+
+      if (data.length === 0) throw new Error('Bảng của bạn đang không có nội dung nào bên dưới cột Phân loại.');
+
+      const uniqueCategories = [...new Set(data.map(item => item['Phân loại']))];
+      
+      setSheetData(data);
+      setCategories(uniqueCategories);
+      setSelectedCategory(uniqueCategories[0]); 
+      setLoadStatus(`✅ Đã tải thành công ${data.length} kịch bản và ${uniqueCategories.length} phân loại.`);
+
+    } catch (error) {
+      setLoadStatus(`❌ Lỗi: ${error.message}`);
+      setSheetData([]);
+      setCategories([]);
+    }
+  };
+
+  // --- HÀM GỌI AI VÀ BỐC THĂM BRAND PICK ---
   const generateScript = async () => {
+    if (sheetData.length === 0) {
+      alert("Vui lòng tải Google Sheet trước khi tạo kịch bản!");
+      return;
+    }
+
     setLoading(true);
     setAiResponse('');
 
-    // Tối ưu System Prompt dựa trên Guideline của Brief
+    // 1. Lọc ra các bài ĐÚNG Phân Loại VÀ ĐƯỢC TICK Brand Pick
+    const matchingRows = sheetData.filter(row => {
+      const isRightCategory = row['Phân loại'] === selectedCategory;
+      
+      // Kiểm tra giá trị của cột "Brand Pick" (xử lý cả trường hợp gõ TRUE, true, 1)
+      const brandPickValue = row['Brand Pick'] ? row['Brand Pick'].toString().trim().toUpperCase() : 'FALSE';
+      const isPicked = (brandPickValue === 'TRUE' || brandPickValue === '1');
+      
+      return isRightCategory && isPicked;
+    });
+
+    // 2. Cảnh báo nếu không có bài nào thỏa mãn
+    if (matchingRows.length === 0) {
+      alert(`Opps! Không tìm thấy kịch bản nào thuộc phân loại "${selectedCategory}" được tick chọn "Brand Pick" cả. Bạn hãy kiểm tra lại file Sheet nhé!`);
+      setLoading(false);
+      return;
+    }
+
+    // 3. Bốc thăm ngẫu nhiên 1 bài trong danh sách đã lọc
+    const randomRow = matchingRows[Math.floor(Math.random() * matchingRows.length)];
+
     const systemPrompt = `Bạn là Copywriter xuất sắc chuyên viết kịch bản TikTok/Reels cho thương hiệu sữa Aptamil New Zealand.
-    Đề bài: Viết kịch bản video ngắn (dưới 60s) dựa trên Pillar [${pillars[selectedPillar].title}] và bối cảnh: "${aiPrompt}".
+    Đề bài: Viết kịch bản video ngắn (dưới 60s) dựa trên các nguyên liệu sau:
+    - Chủ đề: "${randomRow['Chủ đề']}"
+    - Insight khách hàng: "${randomRow['Insight']}"
+    - Câu Hook mở đầu: "${randomRow['Hook']}"
+    - Thông điệp chính (Key Message): "${randomRow['Key message']}"
+    - Hình ảnh mong muốn (Visual): "${randomRow['Visual']}"
+    - Kêu gọi hành động (CTA): "${randomRow['CTA']}"
     
     YÊU CẦU BẮT BUỘC:
     1. Giọng văn: Gần gũi, đời thường, thấu hiểu tâm lý mẹ bỉm sữa Gen Z.
-    2. Thông điệp: Phải truyền tải được Key Message: "${pillars[selectedPillar].message}".
-    3. Lồng ghép tự nhiên ít nhất 1 USP: SYNBIOTIC (hỗ trợ đề kháng/sinh mổ) hoặc DHA (phát triển trí não).
-    4. TỪ VỰNG CHO PHÉP: "hỗ trợ", "giúp", "phù hợp", "góp phần". Chia sẻ góc độ trải nghiệm cá nhân ("Mình thấy bé...", "Bé có vẻ...").
-    5. TỪ VỰNG CẤM DÙNG (Tuyệt đối không có trong kịch bản): "ngăn ngừa", "chữa khỏi", "hoàn toàn", "100%", "đảm bảo", "chứng minh lâm sàng", "độc quyền", "bé hết táo bón", "tăng đề kháng trong 3 ngày". Không dùng thuật ngữ y khoa điều trị.
-    6. Cấu trúc: Hook (gây chú ý) -> Body (câu chuyện/vấn đề + giải pháp Aptamil) -> CTA (câu hỏi tương tác). Trình bày rõ Cột Hình / Cột Âm thanh.
-    7. Cuối bài luôn kèm bộ Hashtag: #AptamilNewZealand3 #AptamilKID #DeKhangTriNao`;
+    2. Lồng ghép tự nhiên ít nhất 1 USP: SYNBIOTIC (hỗ trợ đề kháng/sinh mổ) hoặc DHA (phát triển trí não).
+    3. TỪ VỰNG CHO PHÉP: "hỗ trợ", "giúp", "phù hợp", "góp phần". Chia sẻ góc độ trải nghiệm cá nhân.
+    4. TỪ VỰNG CẤM DÙNG: "ngăn ngừa", "chữa khỏi", "hoàn toàn", "100%", "đảm bảo", "chứng minh lâm sàng", "độc quyền", "bé hết táo bón". Không dùng thuật ngữ y khoa điều trị.
+    5. Cấu trúc rõ ràng 2 cột: Hình ảnh (Visual) | Âm thanh/Lời đọc (Audio).
+    6. Cuối bài luôn kèm bộ Hashtag: #AptamilNewZealand3 #AptamilKID #DeKhangTriNao
+    7. Không sử dụng markdown code block, chỉ format text thông thường.`;
 
     try {
-      // Dùng mẫu URL gọi API chuẩn (Nhớ thay thế model phù hợp nếu bạn dùng API thật)
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `Bối cảnh chi tiết: ${aiPrompt}` }] }],
+            contents: [{ parts: [{ text: "Hãy viết kịch bản theo đúng nguyên liệu được giao." }] }],
             systemInstruction: { parts: [{ text: systemPrompt }] },
             generationConfig: { temperature: 0.7 },
           }),
@@ -169,19 +215,12 @@ const App = () => {
       if (result.error) throw new Error(result.error.message);
 
       const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      // Dọn rác markdown nếu có
       setAiResponse(
-        text
-          .replace(/```html/gi, '')
-          .replace(/```/gi, '')
-          .trim() || 'Không thể tạo kịch bản.'
+        `🎲 Lọc được ${matchingRows.length} bài Brand Pick. Đã bốc thăm trúng Chủ đề: ${randomRow['Chủ đề']}\n\n` +
+        (text.replace(/```html/gi, '').replace(/```/gi, '').trim() || 'Không thể tạo kịch bản.')
       );
     } catch (error) {
-      setAiResponse(
-        `Lỗi API: ${
-          error.message || 'Vui lòng kiểm tra lại API Key hoặc mạng.'
-        }`
-      );
+      setAiResponse(`Lỗi API: ${error.message || 'Vui lòng kiểm tra lại API Key hoặc mạng.'}`);
     } finally {
       setLoading(false);
     }
@@ -193,8 +232,13 @@ const App = () => {
       <header className="bg-[#003087] text-white p-6 shadow-lg sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-white p-2 rounded-lg">
-              <Milk size={28} color="#003087" />
+            {/* LOGO APTAMIL */}
+            <div className="bg-white p-1 rounded-lg flex items-center justify-center h-12 w-20 overflow-hidden">
+              <img 
+                src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRFQyjdYt_mt19cs0SMTyVJFJtftyv7FG4tAg&s" 
+                alt="Aptamil Logo" 
+                className="h-full w-full object-contain"
+              />
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">
@@ -251,15 +295,13 @@ const App = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-blue-600">
                 <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
-                  <Layers size={20} className="text-blue-600" /> Outfit &
-                  Background
+                  <Layers size={20} className="text-blue-600" /> Outfit & Background
                 </h3>
                 <ul className="space-y-3 text-sm text-slate-700">
                   <li className="flex gap-2">
                     <span className="text-blue-600 font-bold">•</span>
                     <span>
-                      <strong>Màu sắc:</strong> Xanh dương, Trắng (màu brand)
-                      hoặc Neutral. Kín đáo, chỉn chu.
+                      <strong>Màu sắc:</strong> Xanh dương, Trắng (màu brand) hoặc Neutral. Kín đáo, chỉn chu.
                     </span>
                   </li>
                   <li className="flex gap-2 text-red-600 font-medium">
@@ -271,16 +313,13 @@ const App = () => {
                   <li className="flex gap-2 text-red-600 font-medium">
                     <span>✕</span>
                     <span>
-                      Cấm bối cảnh: Màu vàng hoặc xanh ngọc (màu đối thủ).
-                      Background lộn xộn, nguy hiểm (dây điện).
+                      Cấm bối cảnh: Màu vàng hoặc xanh ngọc (màu đối thủ). Background lộn xộn, nguy hiểm (dây điện).
                     </span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-blue-600 font-bold">•</span>
                     <span>
-                      <strong>Bối cảnh:</strong> Sạch sẽ, đủ sáng. Giao diện
-                      quen thuộc, mộc mạc. Tránh setup quá nhiều đồ sơ sinh gây
-                      hiểu lầm độ tuổi.
+                      <strong>Bối cảnh:</strong> Sạch sẽ, đủ sáng. Giao diện quen thuộc, mộc mạc. Tránh setup quá nhiều đồ sơ sinh gây hiểu lầm độ tuổi.
                     </span>
                   </li>
                 </ul>
@@ -288,27 +327,19 @@ const App = () => {
 
               <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-amber-500">
                 <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
-                  <Milk size={20} className="text-amber-500" /> Cảnh Quay Sản
-                  Phẩm
+                  <Milk size={20} className="text-amber-500" /> Cảnh Quay Sản Phẩm
                 </h3>
                 <ul className="space-y-3 text-sm text-slate-700">
                   <li className="flex gap-2">
-                    <CheckCircle
-                      size={16}
-                      className="text-green-500 flex-shrink-0 mt-0.5"
-                    />
+                    <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
                     <span>
                       Đặt thẳng đứng, chính diện. Thấy rõ Tên và Số trên lon.
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <CheckCircle
-                      size={16}
-                      className="text-green-500 flex-shrink-0 mt-0.5"
-                    />
+                    <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
                     <span>
-                      <strong>Che mã QR & mã vạch bằng Sticker</strong> (Không
-                      dùng hiệu ứng làm mờ).
+                      <strong>Che mã QR & mã vạch bằng Sticker</strong> (Không dùng hiệu ứng làm mờ).
                     </span>
                   </li>
                   <li className="flex gap-2 text-red-600 font-medium">
@@ -337,17 +368,9 @@ const App = () => {
                     NGUYÊN TẮC CẤM:
                   </p>
                   <ul className="space-y-2 text-slate-700">
-                    <li>
-                      - <strong>KHÔNG</strong> dùng hình ảnh bé sơ sinh (nhìn
-                      yếu ớt, mỏng manh).
-                    </li>
-                    <li>
-                      - <strong>KHÔNG</strong> quay cảnh bé bú bình có núm ti.
-                    </li>
-                    <li>
-                      - <strong>KHÔNG</strong> pha sữa trực tiếp trong bình bú
-                      sơ sinh.
-                    </li>
+                    <li>- <strong>KHÔNG</strong> dùng hình ảnh bé sơ sinh (nhìn yếu ớt, mỏng manh).</li>
+                    <li>- <strong>KHÔNG</strong> quay cảnh bé bú bình có núm ti.</li>
+                    <li>- <strong>KHÔNG</strong> pha sữa trực tiếp trong bình bú sơ sinh.</li>
                   </ul>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-blue-100">
@@ -355,14 +378,8 @@ const App = () => {
                     ĐƯỢC PHÉP LÀM:
                   </p>
                   <ul className="space-y-2 text-slate-700">
-                    <li>
-                      - Bé bụ bẫm, khỏe khoắn, lanh lợi, đang chơi đùa/ngủ ngon.
-                    </li>
-                    <li>
-                      - Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong
-                      sữa -> rót nước -> khuấy -> đút bằng muỗng hoặc cốc tập
-                      uống).
-                    </li>
+                    <li>- Bé bụ bẫm, khỏe khoắn, lanh lợi, đang chơi đùa/ngủ ngon.</li>
+                    <li>- Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong sữa -&gt; rót nước -&gt; khuấy -&gt; đút bằng muỗng hoặc cốc tập uống).</li>
                   </ul>
                 </div>
               </div>
@@ -379,10 +396,7 @@ const App = () => {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {usps.map((usp, index) => (
-                  <div
-                    key={index}
-                    className="bg-white/10 p-3 rounded-xl border border-white/20 flex flex-col justify-between"
-                  >
+                  <div key={index} className="bg-white/10 p-3 rounded-xl border border-white/20 flex flex-col justify-between">
                     <div className="flex justify-between items-start border-b border-white/10 pb-2 mb-2">
                       <span className="font-bold text-blue-50">{usp.term}</span>
                       <span className="text-amber-300 font-mono font-bold text-sm bg-black/20 px-2 py-0.5 rounded">
@@ -399,13 +413,8 @@ const App = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {products.map((p) => (
-                <div
-                  key={p.id}
-                  className="bg-white p-4 rounded-2xl shadow-sm text-center border-b-4 border-[#003087]"
-                >
-                  <span className="text-2xl font-black text-[#003087]">
-                    #{p.id}
-                  </span>
+                <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm text-center border-b-4 border-[#003087]">
+                  <span className="text-2xl font-black text-[#003087]">#{p.id}</span>
                   <p className="font-bold mt-1 text-slate-800">{p.name}</p>
                   <p className="text-xs text-slate-500 mb-2">{p.age}</p>
                   <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
@@ -420,81 +429,89 @@ const App = () => {
         {/* Tab 3: AI Script Generator */}
         {activeTab === 'ai' && (
           <div className="space-y-4 animate-in fade-in">
-            <div className="bg-white p-6 rounded-2xl shadow-sm space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">
-                  1. Chọn Định Hướng (Pillar)
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+              
+              {/* BƯỚC 1: KẾT NỐI GOOGLE SHEET */}
+              <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+                <label className="block text-sm font-bold text-[#003087] mb-3 flex items-center gap-2">
+                  <Database size={18} /> 1. KẾT NỐI NGUỒN DỮ LIỆU (GOOGLE SHEET)
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {Object.keys(pillars).map((key) => (
-                    <button
-                      key={key}
-                      onClick={() => setSelectedPillar(key)}
-                      className={`p-3 rounded-xl text-xs font-bold transition-all border-2 text-left ${
-                        selectedPillar === key
-                          ? 'border-[#003087] bg-blue-50 text-[#003087]'
-                          : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-blue-200'
-                      }`}
-                    >
-                      <div className="mb-1">{pillars[key].title}</div>
-                      <div className="font-normal text-[10px] opacity-80">
-                        {pillars[key].focus}
-                      </div>
-                    </button>
-                  ))}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <LinkIcon size={16} className="absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="text"
+                      value={sheetUrl}
+                      onChange={(e) => setSheetUrl(e.target.value)}
+                      placeholder="Dán link Google Sheet vào đây..."
+                      className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-[#003087] outline-none text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={handleLoadSheet}
+                    className="bg-[#003087] text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-800 transition-colors whitespace-nowrap"
+                  >
+                    Tải Dữ Liệu
+                  </button>
                 </div>
-                <div className="mt-3 p-3 bg-slate-50 border border-slate-100 rounded-lg flex items-start gap-2">
-                  <Sparkles
-                    size={16}
-                    className="text-amber-500 mt-0.5 flex-shrink-0"
-                  />
-                  <p className="text-xs text-slate-600 font-medium">
-                    <span className="font-bold">
-                      Key message cần truyền tải:
-                    </span>{' '}
-                    {pillars[selectedPillar].message}
+                {loadStatus && (
+                  <p className={`mt-3 text-xs font-medium ${loadStatus.includes('❌') ? 'text-red-600' : 'text-green-600'}`}>
+                    {loadStatus}
                   </p>
+                )}
+              </div>
+
+              {/* BƯỚC 2: CHỌN PHÂN LOẠI TỪ SHEET */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">
+                  2. Chọn Phân Loại Content
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    disabled={categories.length === 0}
+                    className="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#003087] outline-none text-sm font-bold appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {categories.length > 0 ? (
+                      categories.map((cat, index) => (
+                        <option key={index} value={cat}>{cat}</option>
+                      ))
+                    ) : (
+                      <option value="">(Vui lòng tải Sheet trước)</option>
+                    )}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                    ▼
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">
-                  2. Cung cấp Brief cho AI (Ngữ cảnh / Tình huống)
-                </label>
-                <textarea
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="Ví dụ: Mẹ đang review đồ dọn giỏ đi sinh, liệt kê quần áo, bỉm... Nhấn mạnh lý do vì sao hộp Aptamil số 1 lại là món quan trọng nhất..."
-                  className="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#003087] focus:border-transparent outline-none min-h-[120px] text-sm"
-                />
-              </div>
-
+              {/* BƯỚC 3: NÚT TẠO KỊCH BẢN */}
               <button
                 onClick={generateScript}
-                disabled={loading || !aiPrompt || !apiKey}
+                disabled={loading || categories.length === 0 || !apiKey}
                 className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
-                  loading || !aiPrompt || !apiKey
+                  loading || categories.length === 0 || !apiKey
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     : 'bg-[#003087] text-white hover:bg-blue-800 shadow-lg hover:shadow-xl hover:-translate-y-0.5'
                 }`}
               >
-                {loading
-                  ? 'AI Đang Suy Nghĩ & Viết Bài...'
-                  : 'Tạo Kịch Bản Chuẩn Hãng'}
+                {loading ? 'AI Đang Bốc Thăm & Viết Bài...' : '✨ Tự Động Bốc Thăm & Viết Kịch Bản'}
                 {!loading && <Video size={18} />}
               </button>
             </div>
 
+            {/* KHU VỰC HIỂN THỊ KẾT QUẢ AI */}
             {aiResponse && (
-              <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-blue-200 animate-in zoom-in-95">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-[#003087] animate-in zoom-in-95">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
                   <h3 className="font-bold text-lg text-[#003087] flex items-center gap-2">
-                    <CheckCircle size={20} className="text-green-500" /> Bản
-                    Nháp (Đã Lọc Từ Ngữ)
+                    <CheckCircle size={20} className="text-green-500" /> Bản Nháp (Bám sát file Sheet)
                   </h3>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(aiResponse);
+                      navigator.clipboard.writeText(aiResponse.trim());
                       alert('Đã copy kịch bản!');
                     }}
                     className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-bold text-slate-700 transition-colors"
@@ -504,16 +521,6 @@ const App = () => {
                 </div>
                 <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed">
                   {aiResponse}
-                </div>
-                <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-slate-100">
-                  {pillars[selectedPillar].tags.map((tag, i) => (
-                    <span
-                      key={i}
-                      className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-100"
-                    >
-                      {tag}
-                    </span>
-                  ))}
                 </div>
               </div>
             )}
@@ -554,17 +561,14 @@ const App = () => {
                     desc: 'Áo 2 dây, hở ngực, hở bụng, croptop, váy ngắn trên đầu gối.',
                   },
                 ].map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex gap-3 items-start p-4 bg-red-50/50 rounded-xl border border-red-100"
-                  >
+                  <div key={i} className="flex gap-3 items-start p-4 bg-red-50/50 rounded-xl border border-red-100">
                     <div className="bg-red-500 text-white p-0.5 rounded-full mt-0.5 flex-shrink-0">
                       <span className="text-[10px] font-bold block w-4 h-4 text-center leading-4">
                         ✕
                       </span>
                     </div>
-                    <div>
-                      <span className="text-sm font-bold text-red-800 block mb-1">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-red-800 mb-1">
                         {item.title}
                       </span>
                       <span className="text-xs text-red-700">{item.desc}</span>
@@ -587,14 +591,8 @@ const App = () => {
                   "Text/Voice dùng đúng từ: 'Hỗ trợ', 'Giúp', 'Phù hợp', 'Góp phần' chưa?",
                   'Đã gắn đủ 3 Hashtags bắt buộc chưa?',
                 ].map((item, i) => (
-                  <label
-                    key={i}
-                    className="flex items-start gap-3 p-4 bg-green-50/30 rounded-xl cursor-pointer hover:bg-green-50 transition-colors border border-transparent hover:border-green-100"
-                  >
-                    <input
-                      type="checkbox"
-                      className="w-5 h-5 mt-0.5 rounded border-slate-300 text-green-600 focus:ring-green-500"
-                    />
+                  <label key={i} className="flex items-start gap-3 p-4 bg-green-50/30 rounded-xl cursor-pointer hover:bg-green-50 transition-colors border border-transparent hover:border-green-100">
+                    <input type="checkbox" className="w-5 h-5 mt-0.5 rounded border-slate-300 text-green-600 focus:ring-green-500" />
                     <span className="text-sm font-medium text-slate-700">
                       {item}
                     </span>
@@ -611,8 +609,7 @@ const App = () => {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-amber-50 border-t border-amber-200 z-20 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)]">
           <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center gap-3">
             <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
-              <AlertTriangle size={16} /> Nhập API Key (Gemini) để mở khóa tính
-              năng AI:
+              <AlertTriangle size={16} /> Nhập API Key (Gemini) để mở khóa tính năng AI:
             </p>
             <input
               type="password"
