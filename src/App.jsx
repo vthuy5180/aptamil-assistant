@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Baby,
   Video,
@@ -8,21 +8,18 @@ import {
   Layers,
   Camera,
   Mic,
-  Copy,
-  Link as LinkIcon,
-  Database
+  Copy
 } from 'lucide-react';
 
 const APTAMIL_BLUE = '#003087';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('ai');
+  const [activeTab, setActiveTab] = useState('guidelines');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
-  const [apiKey, setApiKey] = useState('AIzaSyCvws_THk4cgUKyJx9lHROk3Ls2FQ2f18M');
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
   // --- STATE CHO GOOGLE SHEET ---
-  const [sheetUrl, setSheetUrl] = useState('');
   const [sheetData, setSheetData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -85,20 +82,15 @@ const App = () => {
     { term: 'Choline', read: 'Cô-lin', benefit: 'Hỗ trợ não bộ.' },
   ];
 
-  // --- HÀM TẢI VÀ ĐỌC GOOGLE SHEET ---
+  // --- HÀM TẢI VÀ ĐỌC GOOGLE SHEET (GẮN CỨNG LINK CỦA BẠN) ---
   const handleLoadSheet = async () => {
-    if (!sheetUrl) {
-      setLoadStatus('Vui lòng dán link Google Sheet!');
-      return;
-    }
-
-    setLoadStatus('Đang tải dữ liệu...');
+    setLoadStatus('⏳ Đang đồng bộ dữ liệu mới nhất từ Google Sheet...');
     try {
-      const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-      if (!match) throw new Error('Link không đúng định dạng. Vui lòng copy toàn bộ link Google Sheet.');
-      const sheetId = match[1];
-
-      const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=tsv`;
+      // Gắn cứng ID và GID từ link bạn cung cấp
+      const sheetId = '1XKAlmbObMy70FbYSL31cU0uyVufKcLGZ-TRtzk2jPoU';
+      const gid = '785775318';
+      const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=tsv&gid=${gid}`;
+      
       const response = await fetch(fetchUrl);
       
       if (!response.ok) throw new Error('Không thể đọc Sheet. Đảm bảo bạn đã mở quyền "Bất kỳ ai có liên kết".');
@@ -107,7 +99,7 @@ const App = () => {
       const lines = text.split('\n');
       if (lines.length < 2) throw new Error('Sheet trống hoặc không đúng định dạng.');
 
-      // TÌM DÒNG CHỨA TIÊU ĐỀ THỰC SỰ (Quét 5 dòng đầu tiên)
+      // Tìm dòng chứa tiêu đề thực sự
       let headerIndex = -1;
       let headers = [];
       for (let i = 0; i < Math.min(5, lines.length); i++) {
@@ -123,7 +115,7 @@ const App = () => {
         throw new Error('Không tìm thấy cột "Phân loại". Hãy kiểm tra xem có bị gõ thừa dấu cách trong Sheet không nhé!');
       }
 
-      // Đọc dữ liệu từ dòng bên dưới dòng tiêu đề trở đi
+      // Lấy dữ liệu
       const data = lines.slice(headerIndex + 1).map(line => {
         const values = line.split('\t');
         return headers.reduce((obj, header, index) => {
@@ -138,8 +130,13 @@ const App = () => {
       
       setSheetData(data);
       setCategories(uniqueCategories);
-      setSelectedCategory(uniqueCategories[0]); 
-      setLoadStatus(`✅ Đã tải thành công ${data.length} kịch bản và ${uniqueCategories.length} phân loại.`);
+      
+      // Giữ nguyên category đang chọn nếu nó vẫn tồn tại sau khi update
+      if (!selectedCategory || !uniqueCategories.includes(selectedCategory)) {
+        setSelectedCategory(uniqueCategories[0]); 
+      }
+      
+      setLoadStatus(`✅ Đã đồng bộ ${data.length} kịch bản & ${uniqueCategories.length} phân loại.`);
 
     } catch (error) {
       setLoadStatus(`❌ Lỗi: ${error.message}`);
@@ -148,10 +145,17 @@ const App = () => {
     }
   };
 
+  // Tự động tải dữ liệu khi chuyển sang tab AI
+  useEffect(() => {
+    if (activeTab === 'ai' && sheetData.length === 0) {
+      handleLoadSheet();
+    }
+  }, [activeTab]);
+
   // --- HÀM GỌI AI VÀ BỐC THĂM BRAND PICK ---
   const generateScript = async () => {
     if (sheetData.length === 0) {
-      alert("Vui lòng tải Google Sheet trước khi tạo kịch bản!");
+      alert("Chưa có dữ liệu từ Google Sheet. Vui lòng bấm 'Làm mới dữ liệu'!");
       return;
     }
 
@@ -161,22 +165,18 @@ const App = () => {
     // 1. Lọc ra các bài ĐÚNG Phân Loại VÀ ĐƯỢC TICK Brand Pick
     const matchingRows = sheetData.filter(row => {
       const isRightCategory = row['Phân loại'] === selectedCategory;
-      
-      // Kiểm tra giá trị của cột "Brand Pick" (xử lý cả trường hợp gõ TRUE, true, 1)
       const brandPickValue = row['Brand Pick'] ? row['Brand Pick'].toString().trim().toUpperCase() : 'FALSE';
-      const isPicked = (brandPickValue === 'TRUE' || brandPickValue === '1');
-      
+      const isPicked = (brandPickValue === 'TRUE' || brandPickValue === '1' || brandPickValue === 'TRUE ');
       return isRightCategory && isPicked;
     });
 
-    // 2. Cảnh báo nếu không có bài nào thỏa mãn
     if (matchingRows.length === 0) {
       alert(`Opps! Không tìm thấy kịch bản nào thuộc phân loại "${selectedCategory}" được tick chọn "Brand Pick" cả. Bạn hãy kiểm tra lại file Sheet nhé!`);
       setLoading(false);
       return;
     }
 
-    // 3. Bốc thăm ngẫu nhiên 1 bài trong danh sách đã lọc
+    // 2. Bốc thăm ngẫu nhiên 1 bài
     const randomRow = matchingRows[Math.floor(Math.random() * matchingRows.length)];
 
     const systemPrompt = `Bạn là Copywriter xuất sắc chuyên viết kịch bản TikTok/Reels cho thương hiệu sữa Aptamil New Zealand.
@@ -232,7 +232,6 @@ const App = () => {
       <header className="bg-[#003087] text-white p-6 shadow-lg sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* LOGO APTAMIL */}
             <div className="bg-white p-1 rounded-lg flex items-center justify-center h-12 w-20 overflow-hidden">
               <img 
                 src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRFQyjdYt_mt19cs0SMTyVJFJtftyv7FG4tAg&s" 
@@ -261,18 +260,10 @@ const App = () => {
         {/* Navigation Tabs */}
         <div className="flex bg-white rounded-xl shadow-sm p-1 gap-1 overflow-x-auto">
           {[
-            {
-              id: 'guidelines',
-              label: 'Quy chuẩn Ảnh/Video',
-              icon: <Camera size={18} />,
-            },
+            { id: 'guidelines', label: 'Quy chuẩn Ảnh/Video', icon: <Camera size={18} /> },
             { id: 'usps', label: 'Từ điển Phát âm', icon: <Mic size={18} /> },
             { id: 'ai', label: 'Tạo Kịch Bản AI', icon: <Video size={18} /> },
-            {
-              id: 'check',
-              label: 'Checklist & Red Flags',
-              icon: <AlertTriangle size={18} />,
-            },
+            { id: 'check', label: 'Checklist & Red Flags', icon: <AlertTriangle size={18} /> },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -300,27 +291,19 @@ const App = () => {
                 <ul className="space-y-3 text-sm text-slate-700">
                   <li className="flex gap-2">
                     <span className="text-blue-600 font-bold">•</span>
-                    <span>
-                      <strong>Màu sắc:</strong> Xanh dương, Trắng (màu brand) hoặc Neutral. Kín đáo, chỉn chu.
-                    </span>
+                    <span><strong>Màu sắc:</strong> Xanh dương, Trắng (màu brand) hoặc Neutral. Kín đáo, chỉn chu.</span>
                   </li>
                   <li className="flex gap-2 text-red-600 font-medium">
                     <span>✕</span>
-                    <span>
-                      Cấm: Áo 2 dây, hở bụng, croptop, váy ngắn trên đầu gối.
-                    </span>
+                    <span>Cấm: Áo 2 dây, hở bụng, croptop, váy ngắn trên đầu gối.</span>
                   </li>
                   <li className="flex gap-2 text-red-600 font-medium">
                     <span>✕</span>
-                    <span>
-                      Cấm bối cảnh: Màu vàng hoặc xanh ngọc (màu đối thủ). Background lộn xộn, nguy hiểm (dây điện).
-                    </span>
+                    <span>Cấm bối cảnh: Màu vàng hoặc xanh ngọc (màu đối thủ). Background lộn xộn, nguy hiểm.</span>
                   </li>
                   <li className="flex gap-2">
                     <span className="text-blue-600 font-bold">•</span>
-                    <span>
-                      <strong>Bối cảnh:</strong> Sạch sẽ, đủ sáng. Giao diện quen thuộc, mộc mạc. Tránh setup quá nhiều đồ sơ sinh gây hiểu lầm độ tuổi.
-                    </span>
+                    <span><strong>Bối cảnh:</strong> Sạch sẽ, đủ sáng. Mộc mạc. Tránh setup quá nhiều đồ sơ sinh.</span>
                   </li>
                 </ul>
               </div>
@@ -332,27 +315,19 @@ const App = () => {
                 <ul className="space-y-3 text-sm text-slate-700">
                   <li className="flex gap-2">
                     <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span>
-                      Đặt thẳng đứng, chính diện. Thấy rõ Tên và Số trên lon.
-                    </span>
+                    <span>Đặt thẳng đứng, chính diện. Thấy rõ Tên và Số trên lon.</span>
                   </li>
                   <li className="flex gap-2">
                     <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Che mã QR & mã vạch bằng Sticker</strong> (Không dùng hiệu ứng làm mờ).
-                    </span>
+                    <span><strong>Che mã QR & mã vạch bằng Sticker</strong> (Không dùng hiệu ứng làm mờ).</span>
                   </li>
                   <li className="flex gap-2 text-red-600 font-medium">
                     <span>✕</span>
-                    <span>
-                      Không quay crop mất logo, không để vật khác che khuất.
-                    </span>
+                    <span>Không quay crop mất logo, không để vật khác che khuất.</span>
                   </li>
                   <li className="flex gap-2 text-red-600 font-medium">
                     <span>✕</span>
-                    <span>
-                      Tuyệt đối không lọt thương hiệu đối thủ vào khung hình.
-                    </span>
+                    <span>Tuyệt đối không lọt thương hiệu đối thủ vào khung hình.</span>
                   </li>
                 </ul>
               </div>
@@ -364,22 +339,18 @@ const App = () => {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="bg-white p-4 rounded-xl border border-blue-100">
-                  <p className="font-bold text-red-600 mb-2 border-b pb-2">
-                    NGUYÊN TẮC CẤM:
-                  </p>
+                  <p className="font-bold text-red-600 mb-2 border-b pb-2">NGUYÊN TẮC CẤM:</p>
                   <ul className="space-y-2 text-slate-700">
-                    <li>- <strong>KHÔNG</strong> dùng hình ảnh bé sơ sinh (nhìn yếu ớt, mỏng manh).</li>
+                    <li>- <strong>KHÔNG</strong> dùng hình ảnh bé sơ sinh (yếu ớt).</li>
                     <li>- <strong>KHÔNG</strong> quay cảnh bé bú bình có núm ti.</li>
                     <li>- <strong>KHÔNG</strong> pha sữa trực tiếp trong bình bú sơ sinh.</li>
                   </ul>
                 </div>
                 <div className="bg-white p-4 rounded-xl border border-blue-100">
-                  <p className="font-bold text-green-600 mb-2 border-b pb-2">
-                    ĐƯỢC PHÉP LÀM:
-                  </p>
+                  <p className="font-bold text-green-600 mb-2 border-b pb-2">ĐƯỢC PHÉP LÀM:</p>
                   <ul className="space-y-2 text-slate-700">
-                    <li>- Bé bụ bẫm, khỏe khoắn, lanh lợi, đang chơi đùa/ngủ ngon.</li>
-                    <li>- Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong sữa -&gt; rót nước -&gt; khuấy -&gt; đút bằng muỗng hoặc cốc tập uống).</li>
+                    <li>- Bé bụ bẫm, khỏe khoắn, đang chơi đùa/ngủ ngon.</li>
+                    <li>- Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong -> rót nước -> khuấy -> đút bằng muỗng).</li>
                   </ul>
                 </div>
               </div>
@@ -410,7 +381,6 @@ const App = () => {
                 ))}
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {products.map((p) => (
                 <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm text-center border-b-4 border-[#003087]">
@@ -431,41 +401,21 @@ const App = () => {
           <div className="space-y-4 animate-in fade-in">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
               
-              {/* BƯỚC 1: KẾT NỐI GOOGLE SHEET */}
-              <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
-                <label className="block text-sm font-bold text-[#003087] mb-3 flex items-center gap-2">
-                  <Database size={18} /> 1. KẾT NỐI NGUỒN DỮ LIỆU (GOOGLE SHEET)
-                </label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <LinkIcon size={16} className="absolute left-3 top-3 text-slate-400" />
-                    <input
-                      type="text"
-                      value={sheetUrl}
-                      onChange={(e) => setSheetUrl(e.target.value)}
-                      placeholder="Dán link Google Sheet vào đây..."
-                      className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-[#003087] outline-none text-sm"
-                    />
-                  </div>
-                  <button
-                    onClick={handleLoadSheet}
-                    className="bg-[#003087] text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-blue-800 transition-colors whitespace-nowrap"
+              {/* BƯỚC 1: CHỌN PHÂN LOẠI */}
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">
+                    1. Chọn Phân Loại Content
+                  </label>
+                  <button 
+                    onClick={handleLoadSheet} 
+                    className="text-xs text-[#003087] hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1 font-bold transition-colors"
+                    title="Bấm để lấy dữ liệu mới nhất nếu bạn vừa cập nhật Google Sheet"
                   >
-                    Tải Dữ Liệu
+                    🔄 Làm mới dữ liệu
                   </button>
                 </div>
-                {loadStatus && (
-                  <p className={`mt-3 text-xs font-medium ${loadStatus.includes('❌') ? 'text-red-600' : 'text-green-600'}`}>
-                    {loadStatus}
-                  </p>
-                )}
-              </div>
-
-              {/* BƯỚC 2: CHỌN PHÂN LOẠI TỪ SHEET */}
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">
-                  2. Chọn Phân Loại Content
-                </label>
+                
                 <div className="relative">
                   <select
                     value={selectedCategory}
@@ -478,16 +428,21 @@ const App = () => {
                         <option key={index} value={cat}>{cat}</option>
                       ))
                     ) : (
-                      <option value="">(Vui lòng tải Sheet trước)</option>
+                      <option value="">(Đang tải dữ liệu từ Sheet...)</option>
                     )}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                     ▼
                   </div>
                 </div>
+                {loadStatus && (
+                  <p className={`mt-2 text-xs font-medium italic ${loadStatus.includes('❌') ? 'text-red-500' : 'text-slate-500'}`}>
+                    {loadStatus}
+                  </p>
+                )}
               </div>
 
-              {/* BƯỚC 3: NÚT TẠO KỊCH BẢN */}
+              {/* BƯỚC 2: NÚT TẠO KỊCH BẢN */}
               <button
                 onClick={generateScript}
                 disabled={loading || categories.length === 0 || !apiKey}
@@ -563,14 +518,10 @@ const App = () => {
                 ].map((item, i) => (
                   <div key={i} className="flex gap-3 items-start p-4 bg-red-50/50 rounded-xl border border-red-100">
                     <div className="bg-red-500 text-white p-0.5 rounded-full mt-0.5 flex-shrink-0">
-                      <span className="text-[10px] font-bold block w-4 h-4 text-center leading-4">
-                        ✕
-                      </span>
+                      <span className="text-[10px] font-bold block w-4 h-4 text-center leading-4">✕</span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-red-800 mb-1">
-                        {item.title}
-                      </span>
+                      <span className="text-sm font-bold text-red-800 mb-1">{item.title}</span>
                       <span className="text-xs text-red-700">{item.desc}</span>
                     </div>
                   </div>
@@ -593,9 +544,7 @@ const App = () => {
                 ].map((item, i) => (
                   <label key={i} className="flex items-start gap-3 p-4 bg-green-50/30 rounded-xl cursor-pointer hover:bg-green-50 transition-colors border border-transparent hover:border-green-100">
                     <input type="checkbox" className="w-5 h-5 mt-0.5 rounded border-slate-300 text-green-600 focus:ring-green-500" />
-                    <span className="text-sm font-medium text-slate-700">
-                      {item}
-                    </span>
+                    <span className="text-sm font-medium text-slate-700">{item}</span>
                   </label>
                 ))}
               </div>
@@ -603,24 +552,6 @@ const App = () => {
           </div>
         )}
       </main>
-
-      {/* Floating API Key input */}
-      {activeTab === 'ai' && !apiKey && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-amber-50 border-t border-amber-200 z-20 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)]">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center gap-3">
-            <p className="text-xs font-bold text-amber-800 flex items-center gap-2">
-              <AlertTriangle size={16} /> Nhập API Key (Gemini) để mở khóa tính năng AI:
-            </p>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className="flex-1 p-2.5 rounded-lg border-2 border-amber-300 focus:border-amber-500 outline-none text-sm font-mono w-full sm:w-auto"
-              placeholder="Dán API Key vào đây..."
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
