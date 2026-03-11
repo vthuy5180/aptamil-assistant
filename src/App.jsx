@@ -11,12 +11,12 @@ import {
   Copy
 } from 'lucide-react';
 
-const APTAMIL_BLUE = '#003087';
-
 const App = () => {
   const [activeTab, setActiveTab] = useState('ai');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // API Key lấy từ cấu hình Vercel hoặc file .env
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 
   // --- STATE CHO GOOGLE SHEET ---
@@ -86,7 +86,6 @@ const App = () => {
   const handleLoadSheet = async () => {
     setLoadStatus('⏳ Đang đồng bộ dữ liệu mới nhất từ Google Sheet...');
     try {
-      // Gắn cứng ID và GID từ link bạn cung cấp
       const sheetId = '1XKAlmbObMy70FbYSL31cU0uyVufKcLGZ-TRtzk2jPoU';
       const gid = '785775318';
       const fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=tsv&gid=${gid}`;
@@ -99,7 +98,6 @@ const App = () => {
       const lines = text.split('\n');
       if (lines.length < 2) throw new Error('Sheet trống hoặc không đúng định dạng.');
 
-      // Tìm dòng chứa tiêu đề thực sự
       let headerIndex = -1;
       let headers = [];
       for (let i = 0; i < Math.min(5, lines.length); i++) {
@@ -115,7 +113,6 @@ const App = () => {
         throw new Error('Không tìm thấy cột "Phân loại". Hãy kiểm tra xem có bị gõ thừa dấu cách trong Sheet không nhé!');
       }
 
-      // Lấy dữ liệu
       const data = lines.slice(headerIndex + 1).map(line => {
         const values = line.split('\t');
         return headers.reduce((obj, header, index) => {
@@ -131,7 +128,6 @@ const App = () => {
       setSheetData(data);
       setCategories(uniqueCategories);
       
-      // Giữ nguyên category đang chọn nếu nó vẫn tồn tại sau khi update
       if (!selectedCategory || !uniqueCategories.includes(selectedCategory)) {
         setSelectedCategory(uniqueCategories[0]); 
       }
@@ -145,7 +141,6 @@ const App = () => {
     }
   };
 
-  // Tự động tải dữ liệu khi chuyển sang tab AI
   useEffect(() => {
     if (activeTab === 'ai' && sheetData.length === 0) {
       handleLoadSheet();
@@ -154,13 +149,11 @@ const App = () => {
 
   // --- HÀM GỌI AI VÀ BỐC THĂM BRAND PICK ---
   const generateScript = async () => {
-    // 1. Kiểm tra API Key TRƯỚC TIÊN
     if (!apiKey) {
       alert("Hệ thống chưa được kết nối API Key của Gemini. Vui lòng cấu hình file .env hoặc biến môi trường trên Host!");
       return;
     }
 
-    // 2. Kiểm tra dữ liệu Sheet
     if (sheetData.length === 0) {
       alert("Chưa có dữ liệu từ Google Sheet. Vui lòng bấm 'Làm mới dữ liệu'!");
       return;
@@ -169,7 +162,6 @@ const App = () => {
     setLoading(true);
     setAiResponse('');
 
-    // 3. Lọc ra các bài ĐÚNG Phân Loại VÀ ĐƯỢC TICK Brand Pick
     const matchingRows = sheetData.filter(row => {
       const isRightCategory = row['Phân loại'] === selectedCategory;
       const brandPickValue = row['Brand Pick'] ? row['Brand Pick'].toString().trim().toUpperCase() : 'FALSE';
@@ -183,7 +175,6 @@ const App = () => {
       return;
     }
 
-    // 4. Bốc thăm ngẫu nhiên 1 bài
     const randomRow = matchingRows[Math.floor(Math.random() * matchingRows.length)];
 
     const systemPrompt = `Bạn là Copywriter xuất sắc chuyên viết kịch bản TikTok/Reels cho thương hiệu sữa Aptamil New Zealand.
@@ -235,8 +226,8 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-      {/* Header */}
-      <header className="bg-[#003087] text-white p-6 shadow-lg sticky top-0 z-10">
+      {/* Header - Màu Xanh da trời */}
+      <header className="bg-sky-500 text-white p-6 shadow-lg sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-white p-1 rounded-lg flex items-center justify-center h-12 w-20 overflow-hidden">
@@ -250,13 +241,13 @@ const App = () => {
               <h1 className="text-xl font-bold tracking-tight">
                 APTAMIL CONTENT ASSISTANT
               </h1>
-              <p className="text-xs text-blue-200">
+              <p className="text-xs text-sky-100">
                 Trợ lý sáng tạo nội dung chuẩn Guideline
               </p>
             </div>
           </div>
           <div className="text-right hidden sm:block">
-            <span className="text-[10px] bg-blue-800 px-2 py-1 rounded">
+            <span className="text-[10px] bg-sky-600 px-2 py-1 rounded font-bold">
               VERSION PRO
             </span>
           </div>
@@ -277,7 +268,7 @@ const App = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all text-sm font-bold whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-[#003087] text-white shadow-md'
+                  ? 'bg-sky-500 text-white shadow-md'
                   : 'text-slate-500 hover:bg-slate-100'
               }`}
             >
@@ -291,31 +282,31 @@ const App = () => {
         {activeTab === 'guidelines' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-blue-600">
+              <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-sky-500">
                 <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
-                  <Layers size={20} className="text-blue-600" /> Outfit & Background
+                  <Layers size={20} className="text-sky-500" /> Outfit & Background
                 </h3>
                 <ul className="space-y-3 text-sm text-slate-700">
                   <li className="flex gap-2">
-                    <span className="text-blue-600 font-bold">•</span>
+                    <span className="text-sky-500 font-bold">•</span>
                     <span><strong>Màu sắc:</strong> Xanh dương, Trắng (màu brand) hoặc Neutral. Kín đáo, chỉn chu.</span>
                   </li>
-                  <li className="flex gap-2 text-red-600 font-medium">
+                  <li className="flex gap-2 text-red-500 font-medium">
                     <span>✕</span>
                     <span>Cấm: Áo 2 dây, hở bụng, croptop, váy ngắn trên đầu gối.</span>
                   </li>
-                  <li className="flex gap-2 text-red-600 font-medium">
+                  <li className="flex gap-2 text-red-500 font-medium">
                     <span>✕</span>
                     <span>Cấm bối cảnh: Màu vàng hoặc xanh ngọc (màu đối thủ). Background lộn xộn, nguy hiểm.</span>
                   </li>
                   <li className="flex gap-2">
-                    <span className="text-blue-600 font-bold">•</span>
+                    <span className="text-sky-500 font-bold">•</span>
                     <span><strong>Bối cảnh:</strong> Sạch sẽ, đủ sáng. Mộc mạc. Tránh setup quá nhiều đồ sơ sinh.</span>
                   </li>
                 </ul>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-amber-500">
+              <div className="bg-white p-5 rounded-2xl shadow-sm border-l-4 border-amber-400">
                 <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
                   <Milk size={20} className="text-amber-500" /> Cảnh Quay Sản Phẩm
                 </h3>
@@ -328,11 +319,11 @@ const App = () => {
                     <CheckCircle size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
                     <span><strong>Che mã QR & mã vạch bằng Sticker</strong> (Không dùng hiệu ứng làm mờ).</span>
                   </li>
-                  <li className="flex gap-2 text-red-600 font-medium">
+                  <li className="flex gap-2 text-red-500 font-medium">
                     <span>✕</span>
                     <span>Không quay crop mất logo, không để vật khác che khuất.</span>
                   </li>
-                  <li className="flex gap-2 text-red-600 font-medium">
+                  <li className="flex gap-2 text-red-500 font-medium">
                     <span>✕</span>
                     <span>Tuyệt đối không lọt thương hiệu đối thủ vào khung hình.</span>
                   </li>
@@ -340,24 +331,23 @@ const App = () => {
               </div>
             </div>
 
-            <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
-              <h3 className="font-bold text-blue-800 mb-3 flex items-center gap-2">
+            <div className="bg-sky-50 p-5 rounded-2xl border border-sky-200">
+              <h3 className="font-bold text-sky-700 mb-3 flex items-center gap-2">
                 <Baby size={20} /> Quy Tắc Quay Em Bé & Cảnh Pha Sữa
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div className="bg-white p-4 rounded-xl border border-blue-100">
-                  <p className="font-bold text-red-600 mb-2 border-b pb-2">NGUYÊN TẮC CẤM:</p>
+                <div className="bg-white p-4 rounded-xl border border-sky-100 shadow-sm">
+                  <p className="font-bold text-red-500 mb-2 border-b pb-2">NGUYÊN TẮC CẤM:</p>
                   <ul className="space-y-2 text-slate-700">
                     <li>- <strong>KHÔNG</strong> dùng hình ảnh bé sơ sinh (yếu ớt).</li>
                     <li>- <strong>KHÔNG</strong> quay cảnh bé bú bình có núm ti.</li>
                     <li>- <strong>KHÔNG</strong> pha sữa trực tiếp trong bình bú sơ sinh.</li>
                   </ul>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-blue-100">
+                <div className="bg-white p-4 rounded-xl border border-sky-100 shadow-sm">
                   <p className="font-bold text-green-600 mb-2 border-b pb-2">ĐƯỢC PHÉP LÀM:</p>
                   <ul className="space-y-2 text-slate-700">
                     <li>- Bé bụ bẫm, khỏe khoắn, đang chơi đùa/ngủ ngon.</li>
-                    {/* Đã sửa lỗi ký tự > ở đây */}
                     <li>- Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong -&gt; rót nước -&gt; khuấy -&gt; đút bằng muỗng).</li>
                   </ul>
                 </div>
@@ -369,7 +359,7 @@ const App = () => {
         {/* Tab 2: Phát Âm & Dưỡng Chất */}
         {activeTab === 'usps' && (
           <div className="space-y-4 animate-in fade-in">
-            <div className="bg-[#003087] text-white p-6 rounded-2xl">
+            <div className="bg-sky-500 text-white p-6 rounded-2xl shadow-md">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Mic size={24} /> Từ Điển Phát Âm Bắt Buộc
               </h2>
@@ -377,12 +367,12 @@ const App = () => {
                 {usps.map((usp, index) => (
                   <div key={index} className="bg-white/10 p-3 rounded-xl border border-white/20 flex flex-col justify-between">
                     <div className="flex justify-between items-start border-b border-white/10 pb-2 mb-2">
-                      <span className="font-bold text-blue-50">{usp.term}</span>
+                      <span className="font-bold text-sky-50">{usp.term}</span>
                       <span className="text-amber-300 font-mono font-bold text-sm bg-black/20 px-2 py-0.5 rounded">
                         {usp.read}
                       </span>
                     </div>
-                    <div className="text-xs text-blue-100 leading-relaxed">
+                    <div className="text-xs text-sky-100 leading-relaxed">
                       {usp.benefit}
                     </div>
                   </div>
@@ -391,8 +381,8 @@ const App = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {products.map((p) => (
-                <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm text-center border-b-4 border-[#003087]">
-                  <span className="text-2xl font-black text-[#003087]">#{p.id}</span>
+                <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm text-center border-b-4 border-sky-400">
+                  <span className="text-2xl font-black text-sky-500">#{p.id}</span>
                   <p className="font-bold mt-1 text-slate-800">{p.name}</p>
                   <p className="text-xs text-slate-500 mb-2">{p.age}</p>
                   <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
@@ -417,7 +407,7 @@ const App = () => {
                   </label>
                   <button 
                     onClick={handleLoadSheet} 
-                    className="text-xs text-[#003087] hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1 font-bold transition-colors"
+                    className="text-xs text-sky-600 hover:bg-sky-50 px-3 py-1.5 rounded-lg border border-sky-200 flex items-center gap-1 font-bold transition-colors"
                     title="Bấm để lấy dữ liệu mới nhất nếu bạn vừa cập nhật Google Sheet"
                   >
                     🔄 Làm mới dữ liệu
@@ -429,7 +419,7 @@ const App = () => {
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     disabled={categories.length === 0}
-                    className="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-[#003087] outline-none text-sm font-bold appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full p-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-sky-500 outline-none text-sm font-bold appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {categories.length > 0 ? (
                       categories.map((cat, index) => (
@@ -453,12 +443,11 @@ const App = () => {
               {/* BƯỚC 2: NÚT TẠO KỊCH BẢN */}
               <button
                 onClick={generateScript}
-                // CHỈ khóa nút khi đang tải AI hoặc chưa lấy được dữ liệu Sheet
                 disabled={loading || categories.length === 0}
                 className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
                   loading || categories.length === 0
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    : 'bg-[#003087] text-white hover:bg-blue-800 shadow-lg hover:shadow-xl hover:-translate-y-0.5'
+                    : 'bg-sky-500 text-white hover:bg-sky-600 shadow-lg hover:shadow-xl hover:-translate-y-0.5'
                 }`}
               >
                 {loading ? 'AI Đang Bốc Thăm & Viết Bài...' : '✨ Tự Động Bốc Thăm & Viết Kịch Bản'}
@@ -468,9 +457,9 @@ const App = () => {
 
             {/* KHU VỰC HIỂN THỊ KẾT QUẢ AI */}
             {aiResponse && (
-              <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-[#003087] animate-in zoom-in-95">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-sky-400 animate-in zoom-in-95">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-4">
-                  <h3 className="font-bold text-lg text-[#003087] flex items-center gap-2">
+                  <h3 className="font-bold text-lg text-sky-600 flex items-center gap-2">
                     <CheckCircle size={20} className="text-green-500" /> Bản Nháp (Bám sát file Sheet)
                   </h3>
                   <button
@@ -495,7 +484,7 @@ const App = () => {
         {activeTab === 'check' && (
           <div className="space-y-4 animate-in fade-in">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-100">
-              <h2 className="text-xl font-black mb-6 text-red-600 flex items-center gap-2 uppercase">
+              <h2 className="text-xl font-black mb-6 text-red-500 flex items-center gap-2 uppercase">
                 <AlertTriangle size={24} /> Vùng Cấm (Red Flags)
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -539,7 +528,7 @@ const App = () => {
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-green-200">
-              <h2 className="text-xl font-black mb-6 text-green-700 flex items-center gap-2 uppercase">
+              <h2 className="text-xl font-black mb-6 text-green-600 flex items-center gap-2 uppercase">
                 <CheckCircle size={24} /> Checklist Trước Khi Đăng
               </h2>
               <div className="space-y-3">
@@ -552,7 +541,7 @@ const App = () => {
                   'Đã gắn đủ 3 Hashtags bắt buộc chưa?',
                 ].map((item, i) => (
                   <label key={i} className="flex items-start gap-3 p-4 bg-green-50/30 rounded-xl cursor-pointer hover:bg-green-50 transition-colors border border-transparent hover:border-green-100">
-                    <input type="checkbox" className="w-5 h-5 mt-0.5 rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                    <input type="checkbox" className="w-5 h-5 mt-0.5 rounded border-slate-300 text-green-500 focus:ring-green-400" />
                     <span className="text-sm font-medium text-slate-700">{item}</span>
                   </label>
                 ))}
