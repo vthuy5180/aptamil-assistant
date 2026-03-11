@@ -14,7 +14,7 @@ import {
 const APTAMIL_BLUE = '#003087';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('guidelines');
+  const [activeTab, setActiveTab] = useState('ai');
   const [aiResponse, setAiResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
@@ -154,6 +154,13 @@ const App = () => {
 
   // --- HÀM GỌI AI VÀ BỐC THĂM BRAND PICK ---
   const generateScript = async () => {
+    // 1. Kiểm tra API Key TRƯỚC TIÊN
+    if (!apiKey) {
+      alert("Hệ thống chưa được kết nối API Key của Gemini. Vui lòng cấu hình file .env hoặc biến môi trường trên Host!");
+      return;
+    }
+
+    // 2. Kiểm tra dữ liệu Sheet
     if (sheetData.length === 0) {
       alert("Chưa có dữ liệu từ Google Sheet. Vui lòng bấm 'Làm mới dữ liệu'!");
       return;
@@ -162,7 +169,7 @@ const App = () => {
     setLoading(true);
     setAiResponse('');
 
-    // 1. Lọc ra các bài ĐÚNG Phân Loại VÀ ĐƯỢC TICK Brand Pick
+    // 3. Lọc ra các bài ĐÚNG Phân Loại VÀ ĐƯỢC TICK Brand Pick
     const matchingRows = sheetData.filter(row => {
       const isRightCategory = row['Phân loại'] === selectedCategory;
       const brandPickValue = row['Brand Pick'] ? row['Brand Pick'].toString().trim().toUpperCase() : 'FALSE';
@@ -176,7 +183,7 @@ const App = () => {
       return;
     }
 
-    // 2. Bốc thăm ngẫu nhiên 1 bài
+    // 4. Bốc thăm ngẫu nhiên 1 bài
     const randomRow = matchingRows[Math.floor(Math.random() * matchingRows.length)];
 
     const systemPrompt = `Bạn là Copywriter xuất sắc chuyên viết kịch bản TikTok/Reels cho thương hiệu sữa Aptamil New Zealand.
@@ -350,7 +357,8 @@ const App = () => {
                   <p className="font-bold text-green-600 mb-2 border-b pb-2">ĐƯỢC PHÉP LÀM:</p>
                   <ul className="space-y-2 text-slate-700">
                     <li>- Bé bụ bẫm, khỏe khoắn, đang chơi đùa/ngủ ngon.</li>
-                    <li>- Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong -> rót nước -> khuấy -> đút bằng muỗng).</li>
+                    {/* Đã sửa lỗi ký tự > ở đây */}
+                    <li>- Chỉ quay cảnh <strong>đôi tay mẹ pha sữa</strong> (đong -&gt; rót nước -&gt; khuấy -&gt; đút bằng muỗng).</li>
                   </ul>
                 </div>
               </div>
@@ -445,9 +453,10 @@ const App = () => {
               {/* BƯỚC 2: NÚT TẠO KỊCH BẢN */}
               <button
                 onClick={generateScript}
-                disabled={loading || categories.length === 0 || !apiKey}
+                // CHỈ khóa nút khi đang tải AI hoặc chưa lấy được dữ liệu Sheet
+                disabled={loading || categories.length === 0}
                 className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
-                  loading || categories.length === 0 || !apiKey
+                  loading || categories.length === 0
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     : 'bg-[#003087] text-white hover:bg-blue-800 shadow-lg hover:shadow-xl hover:-translate-y-0.5'
                 }`}
